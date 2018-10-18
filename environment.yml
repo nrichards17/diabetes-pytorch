@@ -1,0 +1,24 @@
+name: dia
+dependencies:
+ - python==3.6.4
+ - numpy
+ - scipy
+ - scikit-learn
+ - jupyter
+ - pandas
+ - matplotlib
+ - seaborn
+ - tqdm
+ - ipython
+ - ipywidgets
+ - jupyterlab
+ - jupyterlab_launcher
+ - nodejs
+ - xlrd
+ - openpyxl
+ - pip:
+   - watermark
+   - hyperopt
+   - networkx==1.11
+   - livelossplot
+   - feather-format
