@@ -103,7 +103,6 @@ if __name__ == '__main__':
 
     print('Reading csv from: {}'.format(args.raw_data_path))
     raw_df = pd.read_csv(args.raw_data_path, na_values='?', low_memory=False)
-
     # replace NO with >30
     raw_df['readmitted'] = raw_df['readmitted'].replace({'NO': '>30'})
 
@@ -133,7 +132,6 @@ if __name__ == '__main__':
 
     # get embedding dimensions, save as part of features
     embedding_sizes = get_embedding_dimensions(encoded_df, CATEGORICAL_FEATURES)
-    print(embedding_sizes)
 
     # train/test split
     train_df, test_df = split_data(encoded_df, split_var=SPLIT_VAR)
@@ -162,9 +160,9 @@ if __name__ == '__main__':
     features.update(variables)
     features['embedding_sizes'] = embedding_sizes
 
-    # features
-
     FEATURE_FILE = os.path.join(args.output_dir, 'features.json')
 
     print(f'Saving features to:\n  {FEATURE_FILE}')
     features.save(FEATURE_FILE)
+
+    print('Done - finished building dataset.')
