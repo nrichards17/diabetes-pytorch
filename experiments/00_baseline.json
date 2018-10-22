@@ -1,10 +1,28 @@
 {
+  "name": "00_baseline",
+
   "dataset": "baseline",
 
   "batch_size": 256,
 
+  "model": {
+    "dropout_emb": 0.2,
+    "dropout_fc": 0.5,
+    "size_fc": [512, 256],
+    "size_final": 64
+  },
+
   "optimizer": {
     "type": "Adam",
     "weight_decay": 1.0e-9
+  },
+
+  "scheduler": {
+    "type": "OneCycle",
+    "max_epochs": 10,
+    "eta_min": 0.001,
+    "eta_max": 0.01,
+    "epsilon": 0.0,
+    "end_fraction": 0.1
   }
 }
