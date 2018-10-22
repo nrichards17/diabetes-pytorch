@@ -1,15 +1,14 @@
 import argparse
 import os
 
+import utils
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import StratifiedShuffleSplit
+
 import pandas as pd
 pd.options.mode.chained_assignment = None  # default='warn'
 pd.options.display.max_columns = 999
 pd.options.display.max_rows = 20
-
-from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import StratifiedShuffleSplit
-
-import utils
 
 
 parser = argparse.ArgumentParser()
@@ -81,6 +80,7 @@ def encode_data(df, continuous_features, categorical_features, output_features):
 
     return encoded_df
 
+
 def split_data(df, split_var):
     splitter = StratifiedShuffleSplit(n_splits=1, test_size=TEST_SPLIT, random_state=SEED)
 
@@ -88,7 +88,7 @@ def split_data(df, split_var):
     train_df = df.iloc[train_iloc, :]
     test_df = df.iloc[test_iloc, :]
 
-    return  train_df, test_df
+    return train_df, test_df
 
 
 if __name__ == '__main__':
@@ -152,6 +152,3 @@ if __name__ == '__main__':
 
     print(f'Saving features to:\n  {FEATURE_FILE}')
     features.save(FEATURE_FILE)
-
-
-
