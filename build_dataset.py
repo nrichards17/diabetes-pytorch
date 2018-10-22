@@ -3,16 +3,21 @@ import os
 
 import pandas as pd
 pd.options.mode.chained_assignment = None  # default='warn'
+pd.options.display.max_columns = 999
+pd.options.display.max_rows = 20
 
 from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import StratifiedShuffleSplit
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--raw_data_path', default='data/raw/diabetic_data.csv', help="Directory with the raw diabetes dataset")
-parser.add_argument('--output_dir', default='data/processed', help="Where to write the new data")
+parser.add_argument('--output_dir', default='data/processed/baseline', help="Where to write the new data")
 
 SEED = 42
 PCT_THRESHOLD = 95
+TEST_SPLIT = 0.2
+SPLIT_VAR = 'readmitted'
 
 IGNORE_FEATURES = [
     'encounter_id',
@@ -46,6 +51,7 @@ def identify_imbalanced_categories(df, categorical_features, pct_threshold):
 
     return imbalanced
 
+
 def downsample_data(df, feature, minority_class, majority_class):
     # number of cases readmitted <30 - minority class
     num_minor_samples = df[feature].value_counts()[minority_class]
@@ -64,6 +70,25 @@ def downsample_data(df, feature, minority_class, majority_class):
     return downsampled_df
 
 
+def encode_data(df, continuous_features, categorical_features, output_features):
+    encoded_df = df[output_features + continuous_features + categorical_features]
+    encoded_df['readmitted'] = encoded_df['readmitted'].replace({'>30': 0, '<30': 1})
+
+    for cat_col in categorical_features:
+        encoded_df[cat_col] = LabelEncoder().fit_transform(encoded_df[cat_col].astype(str))
+
+    return encoded_df
+
+def split_data(df, split_var):
+    splitter = StratifiedShuffleSplit(n_splits=1, test_size=TEST_SPLIT, random_state=SEED)
+
+    train_iloc, test_iloc = next(splitter.split(df, df[split_var]))
+    train_df = df.iloc[train_iloc, :]
+    test_df = df.iloc[test_iloc, :]
+
+    return  train_df, test_df
+
+
 if __name__ == '__main__':
     args = parser.parse_args()
     assert os.path.isfile(args.raw_data_path), "Couldn't find the dataset at {}".format(args.raw_data_path)
@@ -74,6 +99,7 @@ if __name__ == '__main__':
     # replace NO with >30
     raw_df['readmitted'] = raw_df['readmitted'].replace({'NO': '>30'})
 
+    # downsample majority class in Readmitted output feature
     downsampled_df = downsample_data(raw_df,
                                      feature='readmitted',
                                      minority_class='<30',
@@ -86,21 +112,28 @@ if __name__ == '__main__':
 
     imbalanced_features = identify_imbalanced_categories(downsampled_df, categorical_features_all, PCT_THRESHOLD)
 
+    # remove imbalanced features from categorical vars
     CATEGORICAL_FEATURES = [var for var in categorical_features_all
                             if var not in imbalanced_features
                             or var in KEEP_FEATURES]
 
-    # print(categorical_features_all)
-    # print(imbalanced_features)
-    # print(CATEGORICAL_FEATURES)
+    # encode categorical variables
+    encoded_df = encode_data(downsampled_df, CONTINOUS_FEATURES, CATEGORICAL_FEATURES, OUTPUT_FEATURES)
 
-    embedded_df = downsampled_df[OUTPUT_FEATURES + CONTINOUS_FEATURES + CATEGORICAL_FEATURES]
-    embedded_df['readmitted'] = embedded_df['readmitted'].replace({'>30': 0, '<30': 1})
+    # train/test split
+    train_df, test_df = split_data(encoded_df, split_var=SPLIT_VAR)
 
-    for cat_col in CATEGORICAL_FEATURES:
-        print(cat_col)
-        embedded_df[cat_col] = LabelEncoder().fit_transform(embedded_df[cat_col].astype(str))
+    if not os.path.exists(args.output_dir):
+        print('Creating: output dir {}'.format(args.output_dir))
+        os.mkdir(args.output_dir)
+    else:
+        print("Warning: output dir {} already exists".format(args.output_dir))
 
-    print(embedded_df)
-    print(embedded_df.dtypes)
+    TRAIN_FILE = os.path.join(args.output_dir, 'train.csv')
+    TEST_FILE = os.path.join(args.output_dir, 'test.csv')
+
+    print(f'Saving train_df to:\n  {TRAIN_FILE}')
+    train_df.to_csv(TRAIN_FILE, index=False)
+    print(f'Saving test_df to:\n  {TEST_FILE}')
+    test_df.to_csv(TEST_FILE, index=False)
 
