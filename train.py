@@ -4,6 +4,9 @@ import os
 
 import numpy as np
 import torch
+from torch.optim import Adam
+
+from richml.scheduler import OneCycleLR
 
 import utils
 import model.data_loader as data_loader
@@ -12,9 +15,34 @@ import model.net as net
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--experiment', help='Path to experiment json file.')
+parser.add_argument('--path_to_results', default='results/', help='Path to results directory.')
 parser.add_argument('--path_to_data', default='data/processed', help='Path to processed data directory.')
 
 SEED = 42
+
+
+def create_opt_from_params(model, params):
+    optim_params = params['optimizer']
+    sched_params = params['scheduler']
+
+    if optim_params['type'] == 'Adam':
+        optimizer = Adam(model.parameters(), weight_decay=optim_params['weight_decay'])
+    else:
+        raise NotImplementedError('Optimizer {} not implemented'.format(optim_params['type']))
+
+    if sched_params['type'] == 'OneCycle':
+        scheduler = OneCycleLR(
+            optimizer,
+            max_epochs=sched_params['max_epochs'],
+            eta_min=sched_params['eta_min'],
+            eta_max=sched_params['eta_max'],
+            epsilon=sched_params['epsilon'],
+            end_fraction=sched_params['end_fraction']
+        )
+    else:
+        raise NotImplementedError('Scheduler {} not implemented'.format(sched_params['type']))
+
+    return optimizer, scheduler
 
 
 def train(model, optimizer, loss_fn, dataloader, metrics, params):
@@ -40,6 +68,13 @@ if __name__ == '__main__':
     # update params with features - needed for network construction
     params.update(features)
 
+    # create results directory
+    results_path = os.path.join(args.path_to_results, params['name'])
+    if not os.path.exists(results_path):
+        print('Creating results dir: {}'.format(results_path))
+        os.mkdir(results_path)
+    else:
+        print('Warning: results dir {} already exists'.format(results_path))
 
     # set device
     params['cuda'] = torch.cuda.is_available()
@@ -51,18 +86,27 @@ if __name__ == '__main__':
     if params['cuda']: torch.cuda.manual_seed(SEED)
 
     # set logger
+    utils.set_logger(os.path.join(results_path, 'train.log'))
+
+    # Create the input data pipeline
+    logging.info("Loading the datasets...")
 
     # fetch dataloaders
     dataloaders = data_loader.fetch_dataloaders(data_dir=args.path_to_data, features=features, params=params)
     train_dl = dataloaders['train']
     val_dl = dataloaders['val']
 
+    logging.info("- done.")
+
     # create model and optimizer
     model = net.Network(params)
     model.to(params['device'])
 
-    print(model)
+    optimizer, scheduler = create_opt_from_params(model, params)
 
     # set loss fn and metrics
+    loss_fn = torch.nn.BCELoss()
+    # metrics
 
     # train model
+    logging.info('Starting training for {} epoch(s)'.format(params['scheduler']['max_epochs']))
