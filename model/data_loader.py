@@ -1,4 +1,7 @@
+import os
+
 import numpy as np
+import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 
 
@@ -52,7 +55,7 @@ class DiabetesDataset(Dataset):
         return [self.y[idx], self.cont_X[idx], self.cat_X[idx]]
 
 
-def fetch_dataloader():
+def fetch_dataloaders(data_dir, features, params):
     """
     docstring - todo
 
@@ -60,4 +63,27 @@ def fetch_dataloader():
         todo
     """
 
-    pass
+    dataloaders = {}
+
+    TRAIN_FILE = os.path.join(data_dir, params['dataset'], 'train.csv')
+    TEST_FILE = os.path.join(data_dir, params['dataset'], 'test.csv')
+
+    train_df = pd.read_csv(TRAIN_FILE)
+    test_df = pd.read_csv(TEST_FILE)
+
+    train_set = DiabetesDataset(train_df,
+                                continuous_features=features['continuous'],
+                                categorical_features=features['categorical'],
+                                output_features=features['output'])
+    test_set = DiabetesDataset(test_df,
+                               continuous_features=features['continuous'],
+                               categorical_features=features['categorical'],
+                               output_features=features['output'])
+
+    train_dl = DataLoader(train_set, batch_size=params['train_bs'], shuffle=True)
+    test_dl = DataLoader(test_set, batch_size=params['test_bs'], shuffle=False)
+
+    dataloaders['train'] = train_dl
+    dataloaders['test'] = test_dl
+
+    return dataloaders

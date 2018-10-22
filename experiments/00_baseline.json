@@ -1,0 +1,11 @@
+{
+  "dataset": "baseline",
+
+  "train_bs": 256,
+  "test_bs": 256,
+
+  "optimizer": {
+    "type": "Adam",
+    "weight_decay": 1.0e-9
+  }
+}
