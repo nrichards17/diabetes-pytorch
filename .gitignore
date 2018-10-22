@@ -107,6 +107,7 @@ venv.bak/
 *.csv*
 *.zip
 *.pdf
+*.json
 
 # pycharm
 .idea/
