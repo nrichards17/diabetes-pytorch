@@ -43,16 +43,6 @@ CONTINOUS_FEATURES = [
 OUTPUT_FEATURES = ['readmitted']
 
 
-def identify_imbalanced_categories(df, categorical_features, pct_threshold):
-    imbalanced = []
-    for var in categorical_features:
-        counts = list(df[var].value_counts(dropna=False, normalize=True))
-        if counts[0] * 100. > pct_threshold:
-            imbalanced.append(var)
-
-    return imbalanced
-
-
 def downsample_data(df, feature, minority_class, majority_class):
     # number of cases readmitted <30 - minority class
     num_minor_samples = df[feature].value_counts()[minority_class]
@@ -71,14 +61,30 @@ def downsample_data(df, feature, minority_class, majority_class):
     return downsampled_df
 
 
-def encode_data(df, continuous_features, categorical_features, output_features):
-    encoded_df = df[output_features + continuous_features + categorical_features]
+def identify_imbalanced_categories(df, categorical_features, pct_threshold):
+    imbalanced = []
+    for var in categorical_features:
+        counts = list(df[var].value_counts(dropna=False, normalize=True))
+        if counts[0] * 100. > pct_threshold:
+            imbalanced.append(var)
+
+    return imbalanced
+
+
+def encode_data(df, categorical_features):
+    encoded_df = df.copy()
     encoded_df['readmitted'] = encoded_df['readmitted'].replace({'>30': 0, '<30': 1})
 
     for cat_col in categorical_features:
         encoded_df[cat_col] = LabelEncoder().fit_transform(encoded_df[cat_col].astype(str))
 
     return encoded_df
+
+
+def get_embedding_dimensions(df, categorical_features):
+    cat_dims = [int(df[cat_col].nunique()) for cat_col in categorical_features]
+    emb_dims = [(x, min(50, (x + 1) // 2)) for x in cat_dims]
+    return emb_dims
 
 
 def split_data(df, split_var):
@@ -119,8 +125,15 @@ if __name__ == '__main__':
                             if var not in imbalanced_features
                             or var in KEEP_FEATURES]
 
+    # keep only relevant columns, reorder also
+    removed_df = downsampled_df[OUTPUT_FEATURES + CONTINOUS_FEATURES + CATEGORICAL_FEATURES]
+
     # encode categorical variables
-    encoded_df = encode_data(downsampled_df, CONTINOUS_FEATURES, CATEGORICAL_FEATURES, OUTPUT_FEATURES)
+    encoded_df = encode_data(removed_df, CATEGORICAL_FEATURES)
+
+    # get embedding dimensions, save as part of features
+    embedding_sizes = get_embedding_dimensions(encoded_df, CATEGORICAL_FEATURES)
+    print(embedding_sizes)
 
     # train/test split
     train_df, test_df = split_data(encoded_df, split_var=SPLIT_VAR)
@@ -147,6 +160,9 @@ if __name__ == '__main__':
 
     features = utils.Features()
     features.update(variables)
+    features['embedding_sizes'] = embedding_sizes
+
+    # features
 
     FEATURE_FILE = os.path.join(args.output_dir, 'features.json')
 
