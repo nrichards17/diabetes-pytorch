@@ -12,6 +12,7 @@ from richml.scheduler import OneCycleLR
 import utils
 import model.data_loader as data_loader
 import model.net as net
+import evaluate
 
 
 parser = argparse.ArgumentParser()
@@ -57,19 +58,32 @@ def train(model, optimizer, loss_fn, dataloader, metrics, params):
     # device: gpu or cpu
     device = params['device']
 
-    with tqdm(total=len(dataloader)) as bar:
-        for i, (target, X_cont, X_cat) in enumerate(dataloader):
-            target, X_cont, X_cat = target.to(device), X_cont.to(device), X_cat.to(device)
+    summ = []
 
-            output = model(X_cont, X_cat)
-            loss = loss_fn(output, target)
+    for i, (target, X_cont, X_cat) in enumerate(dataloader):
+        target, X_cont, X_cat = target.to(device), X_cont.to(device), X_cat.to(device)
 
-            optimizer.zero_grad()
-            loss.backward()
+        output = model(X_cont, X_cat)
+        loss = loss_fn(output, target)
 
-            optimizer.step()
+        optimizer.zero_grad()
+        loss.backward()
 
-            bar.update()
+        optimizer.step()
+
+        # Evaluate once in a while
+        if i % int(1 / 0.2) == 0:
+            output_batch = output.data.cpu().numpy()
+            labels_batch = target.data.cpu().numpy()
+
+            summary_batch = {metric: metrics[metric](output_batch, labels_batch)
+                             for metric in metrics}
+            summary_batch['loss'] = loss.item()
+            summ.append(summary_batch)
+
+    metrics_mean = {metric: np.mean([x[metric] for x in summ]) for metric in summ[0]}
+    metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_mean.items())
+    logging.info("- Train metrics: " + metrics_string)
 
 def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, scheduler, loss_fn,
                        metrics, params, results_path):
@@ -79,11 +93,13 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, sched
     for epoch in range(num_epochs):
         logging.info('Epoch {}/{}'.format(epoch + 1, num_epochs))
 
+        # step scheduler
+        scheduler.step(epoch)
+
         train(model, optimizer, loss_fn, train_dataloader, metrics, params)
 
-        # step scheduler
-
-        # evaluate
+        # evaluate on val
+        val_metrics = evaluate.evaluate(model, loss_fn, val_dataloader, metrics, params)
 
 
 if __name__ == '__main__':
@@ -143,7 +159,7 @@ if __name__ == '__main__':
     # set loss fn and metrics
     loss_fn = torch.nn.BCELoss()
     # metrics
-    metrics = {}
+    metrics = evaluate.metrics
 
     # train model
     logging.info('Starting training for {} epoch(s)'.format(params['scheduler']['max_epochs']))
