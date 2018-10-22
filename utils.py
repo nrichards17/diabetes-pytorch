@@ -34,3 +34,6 @@ class Params:
     def dict(self):
         """Gives dict-like access to Params instance by `params.dict['learning_rate']"""
         return self.__dict__
+
+    def __str__(self):
+        return str(self.__dict__)
