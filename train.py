@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+from tqdm import tqdm
 
 import numpy as np
 import torch
@@ -46,7 +47,43 @@ def create_opt_from_params(model, params):
 
 
 def train(model, optimizer, loss_fn, dataloader, metrics, params):
-    pass
+    """
+    todo
+    """
+
+    # set model to training mode
+    model.train()
+
+    # device: gpu or cpu
+    device = params['device']
+
+    with tqdm(total=len(dataloader)) as bar:
+        for i, (target, X_cont, X_cat) in enumerate(dataloader):
+            target, X_cont, X_cat = target.to(device), X_cont.to(device), X_cat.to(device)
+
+            output = model(X_cont, X_cat)
+            loss = loss_fn(output, target)
+
+            optimizer.zero_grad()
+            loss.backward()
+
+            optimizer.step()
+
+            bar.update()
+
+def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, scheduler, loss_fn,
+                       metrics, params, results_path):
+
+    num_epochs = params['scheduler']['max_epochs']
+
+    for epoch in range(num_epochs):
+        logging.info('Epoch {}/{}'.format(epoch + 1, num_epochs))
+
+        train(model, optimizer, loss_fn, train_dataloader, metrics, params)
+
+        # step scheduler
+
+        # evaluate
 
 
 if __name__ == '__main__':
@@ -80,7 +117,6 @@ if __name__ == '__main__':
     params['cuda'] = torch.cuda.is_available()
     params['device'] = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
     # set random seeds
     torch.manual_seed(SEED)
     if params['cuda']: torch.cuda.manual_seed(SEED)
@@ -107,6 +143,8 @@ if __name__ == '__main__':
     # set loss fn and metrics
     loss_fn = torch.nn.BCELoss()
     # metrics
+    metrics = {}
 
     # train model
     logging.info('Starting training for {} epoch(s)'.format(params['scheduler']['max_epochs']))
+    train_and_evaluate(model, train_dl, val_dl, optimizer, scheduler, loss_fn, metrics, params, results_path)
