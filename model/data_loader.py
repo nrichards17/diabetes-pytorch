@@ -65,25 +65,21 @@ def fetch_dataloaders(data_dir, features, params):
 
     dataloaders = {}
 
-    TRAIN_FILE = os.path.join(data_dir, params['dataset'], 'train.csv')
-    TEST_FILE = os.path.join(data_dir, params['dataset'], 'test.csv')
+    for split in ['train', 'val', 'test']:
+        name = '{}.csv'.format(split)
+        FILE = os.path.join(data_dir, params['dataset'], name)
+        df = pd.read_csv(FILE)
 
-    train_df = pd.read_csv(TRAIN_FILE)
-    test_df = pd.read_csv(TEST_FILE)
+        dataset = DiabetesDataset(df,
+                                  continuous_features=features['continuous'],
+                                  categorical_features=features['categorical'],
+                                  output_features=features['output'])
 
-    train_set = DiabetesDataset(train_df,
-                                continuous_features=features['continuous'],
-                                categorical_features=features['categorical'],
-                                output_features=features['output'])
-    test_set = DiabetesDataset(test_df,
-                               continuous_features=features['continuous'],
-                               categorical_features=features['categorical'],
-                               output_features=features['output'])
+        if split == 'train':
+            loader = DataLoader(dataset, batch_size=params['batch_size'], shuffle=True)
+        else:
+            loader = DataLoader(dataset, batch_size=params['batch_size'], shuffle=False)
 
-    train_dl = DataLoader(train_set, batch_size=params['train_bs'], shuffle=True)
-    test_dl = DataLoader(test_set, batch_size=params['test_bs'], shuffle=False)
-
-    dataloaders['train'] = train_dl
-    dataloaders['test'] = test_dl
+        dataloaders[split] = loader
 
     return dataloaders
