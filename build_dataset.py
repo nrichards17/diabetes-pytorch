@@ -19,7 +19,8 @@ OUTPUT_DATA_DIR = 'data/processed/baseline'
 
 SEED = 42
 PCT_THRESHOLD = 95
-TEST_SPLIT = 0.2
+TEST_SPLIT = 0.1
+VAL_SPLIT = 0.1
 SPLIT_VAR = 'readmitted'
 
 IGNORE_FEATURES = [
@@ -89,8 +90,8 @@ def get_embedding_dimensions(df, categorical_features):
     return emb_dims
 
 
-def split_data(df, split_var):
-    splitter = StratifiedShuffleSplit(n_splits=1, test_size=TEST_SPLIT, random_state=SEED)
+def split_data(df, test_size, split_var):
+    splitter = StratifiedShuffleSplit(n_splits=1, test_size=test_size, random_state=SEED)
 
     train_iloc, test_iloc = next(splitter.split(df, df[split_var]))
     train_df = df.iloc[train_iloc, :]
@@ -107,12 +108,15 @@ if __name__ == '__main__':
     raw_df = pd.read_csv(args.raw_data_path, na_values='?', low_memory=False)
     # replace NO with >30
     raw_df['readmitted'] = raw_df['readmitted'].replace({'NO': '>30'})
+    print('  {}'.format(raw_df.shape))
 
     # downsample majority class in Readmitted output feature
     downsampled_df = downsample_data(raw_df,
                                      feature='readmitted',
                                      minority_class='<30',
                                      majority_class='>30')
+    print('Downsampling data')
+    print('  {}'.format(downsampled_df.shape))
 
     categorical_features_all = [var for var in raw_df.columns
                                 if var not in IGNORE_FEATURES
@@ -135,8 +139,18 @@ if __name__ == '__main__':
     # get embedding dimensions, save as part of features
     embedding_sizes = get_embedding_dimensions(encoded_df, CATEGORICAL_FEATURES)
 
-    # train/test split
-    train_df, test_df = split_data(encoded_df, split_var=SPLIT_VAR)
+    # train/val/test split
+    n_rows = len(encoded_df)
+    test_size = int(TEST_SPLIT * n_rows)
+    val_size = int(VAL_SPLIT * n_rows)
+
+    train_df, test_df = split_data(encoded_df, test_size=test_size, split_var=SPLIT_VAR)
+    train_df, val_df = split_data(train_df, test_size=val_size, split_var=SPLIT_VAR)
+
+    print('Splitting data:')
+    print('  Train: {}'.format(train_df.shape))
+    print('  Val: {}'.format(val_df.shape))
+    print('  Test: {}'.format(test_df.shape))
 
     if not os.path.exists(OUTPUT_DATA_DIR):
         print('Creating: output dir {}'.format(OUTPUT_DATA_DIR))
@@ -145,10 +159,13 @@ if __name__ == '__main__':
         print("Warning: output dir {} already exists".format(OUTPUT_DATA_DIR))
 
     TRAIN_FILE = os.path.join(OUTPUT_DATA_DIR, 'train.csv')
+    VAL_FILE = os.path.join(OUTPUT_DATA_DIR, 'val.csv')
     TEST_FILE = os.path.join(OUTPUT_DATA_DIR, 'test.csv')
 
     print(f'Saving train_df to:\n  {TRAIN_FILE}')
     train_df.to_csv(TRAIN_FILE, index=False)
+    print(f'Saving val_df to:\n  {VAL_FILE}')
+    val_df.to_csv(VAL_FILE, index=False)
     print(f'Saving test_df to:\n  {TEST_FILE}')
     test_df.to_csv(TEST_FILE, index=False)
 
