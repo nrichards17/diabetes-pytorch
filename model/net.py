@@ -81,4 +81,3 @@ class Network(nn.Module):
         x = torch.sigmoid(x)
 
         return x
-
