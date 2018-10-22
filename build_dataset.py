@@ -13,7 +13,9 @@ pd.options.display.max_rows = 20
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--raw_data_path', default='data/raw/diabetic_data.csv', help="Directory with the raw diabetes dataset")
-parser.add_argument('--output_dir', default='data/processed/baseline', help="Where to write the new data")
+# parser.add_argument('--output_dir', default='data/processed/baseline', help="Where to write the new data")
+
+OUTPUT_DATA_DIR = 'data/processed/baseline'
 
 SEED = 42
 PCT_THRESHOLD = 95
@@ -136,14 +138,14 @@ if __name__ == '__main__':
     # train/test split
     train_df, test_df = split_data(encoded_df, split_var=SPLIT_VAR)
 
-    if not os.path.exists(args.output_dir):
-        print('Creating: output dir {}'.format(args.output_dir))
-        os.mkdir(args.output_dir)
+    if not os.path.exists(OUTPUT_DATA_DIR):
+        print('Creating: output dir {}'.format(OUTPUT_DATA_DIR))
+        os.mkdir(OUTPUT_DATA_DIR)
     else:
-        print("Warning: output dir {} already exists".format(args.output_dir))
+        print("Warning: output dir {} already exists".format(OUTPUT_DATA_DIR))
 
-    TRAIN_FILE = os.path.join(args.output_dir, 'train.csv')
-    TEST_FILE = os.path.join(args.output_dir, 'test.csv')
+    TRAIN_FILE = os.path.join(OUTPUT_DATA_DIR, 'train.csv')
+    TEST_FILE = os.path.join(OUTPUT_DATA_DIR, 'test.csv')
 
     print(f'Saving train_df to:\n  {TRAIN_FILE}')
     train_df.to_csv(TRAIN_FILE, index=False)
@@ -160,7 +162,7 @@ if __name__ == '__main__':
     features.update(variables)
     features['embedding_sizes'] = embedding_sizes
 
-    FEATURE_FILE = os.path.join(args.output_dir, 'features.json')
+    FEATURE_FILE = os.path.join(OUTPUT_DATA_DIR, 'features.json')
 
     print(f'Saving features to:\n  {FEATURE_FILE}')
     features.save(FEATURE_FILE)
