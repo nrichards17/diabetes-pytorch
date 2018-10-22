@@ -7,6 +7,7 @@ import torch
 
 import utils
 import model.data_loader as data_loader
+import model.net as net
 
 
 parser = argparse.ArgumentParser()
@@ -36,9 +37,9 @@ if __name__ == '__main__':
 
     features = utils.Features()
     features.load(features_path)
+    # update params with features - needed for network construction
+    params.update(features)
 
-    # params.update(features)
-    # print(params)
 
     # set device
     params['cuda'] = torch.cuda.is_available()
@@ -57,6 +58,10 @@ if __name__ == '__main__':
     val_dl = dataloaders['val']
 
     # create model and optimizer
+    model = net.Network(params)
+    model.to(params['device'])
+
+    print(model)
 
     # set loss fn and metrics
 
