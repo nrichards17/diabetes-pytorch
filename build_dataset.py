@@ -9,6 +9,8 @@ pd.options.display.max_rows = 20
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import StratifiedShuffleSplit
 
+import utils
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--raw_data_path', default='data/raw/diabetic_data.csv', help="Directory with the raw diabetes dataset")
@@ -136,4 +138,20 @@ if __name__ == '__main__':
     train_df.to_csv(TRAIN_FILE, index=False)
     print(f'Saving test_df to:\n  {TEST_FILE}')
     test_df.to_csv(TEST_FILE, index=False)
+
+    variables = {
+        'continuous': CONTINOUS_FEATURES,
+        'categorical': CATEGORICAL_FEATURES,
+        'output': OUTPUT_FEATURES
+    }
+
+    features = utils.Features()
+    features.update(variables)
+
+    FEATURE_FILE = os.path.join(args.output_dir, 'features.json')
+
+    print(f'Saving features to:\n  {FEATURE_FILE}')
+    features.save(FEATURE_FILE)
+
+
 

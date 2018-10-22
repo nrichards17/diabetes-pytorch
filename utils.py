@@ -37,3 +37,24 @@ class Params:
 
     def __str__(self):
         return str(self.__dict__)
+
+
+class Features:
+    def save(self, json_path):
+        with open(json_path, 'w') as f:
+            json.dump(self.__dict__, f, indent=4)
+
+    def load(self, json_path):
+        with open(json_path) as f:
+            params = json.load(f)
+            self.__dict__.update(params)
+
+    def update(self, variables):
+        self.__dict__.update(variables)
+
+    @property
+    def dict(self):
+        """Gives dict-like access to Params instance by `params.dict['learning_rate']"""
+        return self.__dict__
+
+
