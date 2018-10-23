@@ -164,6 +164,23 @@ def downsample_data(df, feature, minority_class, majority_class):
 
     return downsampled_df
 
+def upsample_data(df, feature, minority_class, majority_class):
+    """
+    Naive upsampling - resample minority class with replacement
+    """
+    num_major_samples = df[feature].value_counts()[majority_class]
+    minority_df = df[df[feature] == minority_class]
+    majority_df = df[df[feature] == majority_class]
+
+    # upsample minority class to same number as majority
+    minority_upsampled_df = minority_df.sample(num_major_samples, replace=True, random_state=SEED)
+
+    upsampled_df = pd.concat([minority_upsampled_df, majority_df])
+    upsampled_df = upsampled_df.sample(frac=1, random_state=SEED).reset_index(drop=True)
+
+    return upsampled_df
+
+
 
 def identify_imbalanced_categories(df, categorical_features, pct_threshold):
     imbalanced = []
@@ -230,15 +247,15 @@ if __name__ == '__main__':
     print(' - Casting age as numeric')
     df = age_to_numeric(df)
 
-    # downsample majority class in Readmitted output feature
-    print(' - Downsampling data')
-    before = df.shape
-    df = downsample_data(df,
-                         feature='readmitted',
-                         minority_class='<30',
-                         majority_class='>30')
-    after = df.shape
-    print(f'\t{before} -> {after}')
+    # # downsample majority class in Readmitted output feature
+    # print(' - Downsampling data')
+    # before = df.shape
+    # df = downsample_data(df,
+    #                      feature='readmitted',
+    #                      minority_class='<30',
+    #                      majority_class='>30')
+    # after = df.shape
+    # print(f'\t{before} -> {after}')
 
     categorical_features_all = [var for var in raw_df.columns
                                 if var not in IGNORE_FEATURES
@@ -277,6 +294,18 @@ if __name__ == '__main__':
     print('\tTrain: {}'.format(train_df.shape))
     print('\tVal: {}'.format(val_df.shape))
     print('\tTest: {}'.format(test_df.shape))
+
+    # upsample train set
+    print(' - Upsampling train set')
+    train_df = upsample_data(train_df,
+                             feature='readmitted',
+                             minority_class=1,  # <30 days
+                             majority_class=0)  # >30 days
+
+    print('\tTrain: {}'.format(train_df.shape))
+    print('\tVal: {}'.format(val_df.shape))
+    print('\tTest: {}'.format(test_df.shape))
+
 
     if not os.path.exists(OUTPUT_DATA_DIR):
         print('Creating: output dir {}'.format(OUTPUT_DATA_DIR))
