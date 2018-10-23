@@ -13,7 +13,7 @@ pd.options.display.max_rows = 20
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--raw_data_path', default='data/raw/diabetic_data.csv', help="Directory with the raw diabetes dataset")
-# parser.add_argument('--output_dir', default='data/processed/baseline', help="Where to write the new data")
+
 
 OUTPUT_DATA_DIR = 'data/processed/baseline'
 
@@ -207,31 +207,57 @@ if __name__ == '__main__':
 
     print('Reading csv from: {}'.format(args.raw_data_path))
     raw_df = pd.read_csv(args.raw_data_path, na_values='?', low_memory=False)
+
+    print('Starting preprocessing:')
+
     # replace NO with >30
-    raw_df['readmitted'] = raw_df['readmitted'].replace({'NO': '>30'})
-    print('  {}'.format(raw_df.shape))
+    print(' - Recasting output: readmitted')
+    df = raw_df.copy()
+    df['readmitted'] = df['readmitted'].replace({'NO': '>30'})
+
+    print(' - Dropping multiple encounters, missing gender & diag_1, expired')
+    before = df.shape
+    df = drop_rows(df)
+    after = df.shape
+    print(f'\t{before} -> {after}')
+
+    print(' - Recoding diagnoses')
+    df = recode_diagnoses(df)
+
+    print(' - Recoding admission and discharge ids')
+    df = recode_admission_discharge(df)
+
+    print(' - Casting age as numeric')
+    df = age_to_numeric(df)
 
     # downsample majority class in Readmitted output feature
-    downsampled_df = downsample_data(raw_df,
-                                     feature='readmitted',
-                                     minority_class='<30',
-                                     majority_class='>30')
-    print('Downsampling data')
-    print('  {}'.format(downsampled_df.shape))
+    print(' - Downsampling data')
+    before = df.shape
+    df = downsample_data(df,
+                         feature='readmitted',
+                         minority_class='<30',
+                         majority_class='>30')
+    after = df.shape
+    print(f'\t{before} -> {after}')
 
     categorical_features_all = [var for var in raw_df.columns
                                 if var not in IGNORE_FEATURES
                                 and var not in CONTINOUS_FEATURES
                                 and var not in OUTPUT_FEATURES]
 
-    imbalanced_features = identify_imbalanced_categories(downsampled_df, categorical_features_all, PCT_THRESHOLD)
+    print(' - Identifying imbalanced categorical features')
+    imbalanced_features = identify_imbalanced_categories(df, categorical_features_all, PCT_THRESHOLD)
 
     # remove imbalanced features from categorical vars
     CATEGORICAL_FEATURES = [var for var in categorical_features_all
                             if var not in imbalanced_features]
 
     # keep only relevant columns, reorder also
-    removed_df = downsampled_df[OUTPUT_FEATURES + CONTINOUS_FEATURES + CATEGORICAL_FEATURES]
+    print(' - Removing unused features')
+    before = df.shape
+    removed_df = df[OUTPUT_FEATURES + CONTINOUS_FEATURES + CATEGORICAL_FEATURES]
+    after = removed_df.shape
+    print(f'\t{before} -> {after}')
 
     # encode categorical variables
     encoded_df = encode_data(removed_df, CATEGORICAL_FEATURES)
@@ -247,10 +273,10 @@ if __name__ == '__main__':
     train_df, test_df = split_data(encoded_df, test_size=test_size, split_var=SPLIT_VAR)
     train_df, val_df = split_data(train_df, test_size=val_size, split_var=SPLIT_VAR)
 
-    print('Splitting data:')
-    print('  Train: {}'.format(train_df.shape))
-    print('  Val: {}'.format(val_df.shape))
-    print('  Test: {}'.format(test_df.shape))
+    print(' - Splitting data:')
+    print('\tTrain: {}'.format(train_df.shape))
+    print('\tVal: {}'.format(val_df.shape))
+    print('\tTest: {}'.format(test_df.shape))
 
     if not os.path.exists(OUTPUT_DATA_DIR):
         print('Creating: output dir {}'.format(OUTPUT_DATA_DIR))
@@ -284,4 +310,4 @@ if __name__ == '__main__':
     print(f'Saving features to:\n  {FEATURE_FILE}')
     features.save(FEATURE_FILE)
 
-    print('Done - finished building dataset.')
+    print('Done.')
