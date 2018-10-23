@@ -1,7 +1,9 @@
 import argparse
 import logging
 import os
+import sys
 from tqdm import tqdm
+import click
 
 import numpy as np
 import torch
@@ -61,25 +63,27 @@ def train(model, optimizer, loss_fn, dataloader, metrics, params):
     summ = []
 
     for i, (target, X_cont, X_cat) in enumerate(dataloader):
+        optimizer.zero_grad()
+
         target, X_cont, X_cat = target.to(device), X_cont.to(device), X_cat.to(device)
 
         output = model(X_cont, X_cat)
         loss = loss_fn(output, target)
-
-        optimizer.zero_grad()
         loss.backward()
 
+        # scheduler.step()
         optimizer.step()
 
         # Evaluate once in a while
         if i % int(1 / 0.2) == 0:
-            output_batch = output.data.cpu().numpy()
-            labels_batch = target.data.cpu().numpy()
+            with torch.no_grad():
+                output_batch = output.data.cpu().numpy()
+                labels_batch = target.data.cpu().numpy()
 
-            summary_batch = {metric: metrics[metric](output_batch, labels_batch)
-                             for metric in metrics}
-            summary_batch['loss'] = loss.item()
-            summ.append(summary_batch)
+                summary_batch = {metric: metrics[metric](output_batch, labels_batch)
+                                 for metric in metrics}
+                summary_batch['loss'] = loss.item()
+                summ.append(summary_batch)
 
     metrics_mean = {metric: np.mean([x[metric] for x in summ]) for metric in summ[0]}
     metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_mean.items())
@@ -91,10 +95,11 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, sched
     num_epochs = params['scheduler']['max_epochs']
 
     for epoch in range(num_epochs):
-        logging.info('Epoch {}/{}'.format(epoch + 1, num_epochs))
-
         # step scheduler
-        scheduler.step(epoch)
+        if scheduler:
+            scheduler.step(epoch)
+
+        logging.info('Epoch {}/{} | LR: {}'.format(epoch + 1, num_epochs, optimizer.param_groups[0]['lr']))
 
         train(model, optimizer, loss_fn, train_dataloader, metrics, params)
 
@@ -118,6 +123,7 @@ if __name__ == '__main__':
 
     features = utils.Features()
     features.load(features_path)
+
     # update params with features - needed for network construction
     params.update(features)
 
@@ -154,13 +160,31 @@ if __name__ == '__main__':
     model = net.Network(params)
     model.to(params['device'])
 
-    optimizer, scheduler = create_opt_from_params(model, params)
+    # optimizer, scheduler = create_opt_from_params(model, params)
+    optimizer = Adam(model.parameters(), lr=1.0e-3, weight_decay=1.0e-4)
+    scheduler = None
 
     # set loss fn and metrics
     loss_fn = torch.nn.BCELoss()
+    # loss_fn = torch.nn.BCEWithLogitsLoss()
+
     # metrics
     metrics = evaluate.metrics
 
-    # train model
-    logging.info('Starting training for {} epoch(s)'.format(params['scheduler']['max_epochs']))
-    train_and_evaluate(model, train_dl, val_dl, optimizer, scheduler, loss_fn, metrics, params, results_path)
+    logging.info(model)
+
+    # for var, params in zip(params['categorical'], model.embeddings.parameters()):
+    #     print(var)
+    #     print(params)
+
+    if click.confirm('Continue with training?', default=False):
+        # train model
+        logging.info('Starting training for {} epoch(s)'.format(params['scheduler']['max_epochs']))
+        try:
+            train_and_evaluate(model, train_dl, val_dl, optimizer, scheduler, loss_fn, metrics, params, results_path)
+        except KeyboardInterrupt:
+            logging.warning('Training interrupted by user.')
+            sys.exit(0)
+    else:
+        logging.warning('Training not started.')
+        sys.exit(0)

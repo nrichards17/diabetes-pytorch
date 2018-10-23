@@ -13,7 +13,7 @@ class FCUnit(nn.Module):
 
     def forward(self, x):
         x = self.linear(x)
-        x = F.elu(x)
+        x = F.leaky_relu(x)
         x = self.batchnorm(x)
         x = self.dropout(x)
 
@@ -28,6 +28,7 @@ class Network(nn.Module):
         embedding_sizes = params['embedding_sizes']
         n_continous = len(params['continuous'])
         n_embedding = sum([y for _, y in embedding_sizes])
+        # n_embedding = 0
         size_fc = params['model']['size_fc']
         size_final = params['model']['size_final']
         dropout_emb = params['model']['dropout_emb']

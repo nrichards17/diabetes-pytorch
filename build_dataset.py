@@ -186,7 +186,7 @@ def encode_data(df, categorical_features):
 
 
 def get_embedding_dimensions(df, categorical_features):
-    cat_dims = [int(df[cat_col].nunique()) for cat_col in categorical_features]
+    cat_dims = [int(df[cat_col].nunique(dropna=False)) for cat_col in categorical_features]
     emb_dims = [(x, min(50, (x + 1) // 2)) for x in cat_dims]
     return emb_dims
 
