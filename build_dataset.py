@@ -26,13 +26,13 @@ SPLIT_VAR = 'readmitted'
 IGNORE_FEATURES = [
     'encounter_id',
     'patient_nbr',
-]
-
-KEEP_FEATURES = [
     'weight',
+    'payer_code',
+    'medical_specialty',
 ]
 
 CONTINOUS_FEATURES = [
+    'age',
     'time_in_hospital',
     'num_lab_procedures',
     'num_procedures',
@@ -44,6 +44,107 @@ CONTINOUS_FEATURES = [
 ]
 
 OUTPUT_FEATURES = ['readmitted']
+
+
+def drop_rows(df):
+    dropped_df = df.copy()
+
+    # drop multiple encounters
+    dropped_df = dropped_df.drop_duplicates(subset='patient_nbr', keep='first')
+    # drop missing gender
+    dropped_df = dropped_df[dropped_df['gender'] != 'Unknown/Invalid']
+    # drop missing diag_1
+    dropped_df = dropped_df.dropna(subset=['diag_1'])
+
+    expired = [11, 19, 20, 21]
+
+    # drop 11 - Expired
+    dropped_df = dropped_df[~dropped_df['discharge_disposition_id'].isin(expired)]
+
+    return dropped_df
+
+
+def convert_code(code):
+    if pd.isnull(code):
+        return code
+
+    if ('V' in code) or ('E' in code):
+        return 'Other'
+
+    val = int(float(code))
+
+    if (390 <= val <= 459) or (val == 785):
+        return 'Circulatory'
+    elif (460 <= val <= 519) or (val == 786):
+        return 'Respiriatory'
+    elif (520 <= val <= 579) or (val == 787):
+        return 'Digestive'
+    elif (val == 250):
+        return 'Diabetes'
+    elif (800 <= val <= 999):
+        return 'Injury'
+    elif (710 <= val <= 739):
+        return 'Musculoskeletal'
+    elif (580 <= val <= 629) or (val == 788):
+        return 'Genitourinary'
+    elif (140 <= val <= 239):
+        return 'Neoplasms'
+    else:
+        return 'Other'
+
+
+def recode_diagnoses(df):
+    recoded_df = df.copy()
+
+    recoded_df['diag_1'] = recoded_df['diag_1'].apply(convert_code)
+    recoded_df['diag_2'] = recoded_df['diag_2'].apply(convert_code)
+    recoded_df['diag_3'] = recoded_df['diag_3'].apply(convert_code)
+
+    return recoded_df
+
+
+def recode_admission_discharge(df):
+    recoded_df = df.copy()
+
+    id_vars = {
+        'admission_type_id': [
+            [1, 2, 7],  # emergency
+            [5, 6, 8]   # null
+        ],
+        'discharge_disposition_id': [
+            [18, 25, 26],   # null
+            [11, 19, 20, 21],   # expired
+        ],
+        'admission_source_id': [
+            [9, 15, 17, 20, 21]     # null
+        ]
+    }
+    for key, groups in id_vars.items():
+        for group in groups:
+            recoded_df[key] = recoded_df[key].replace({x: group[0] for x in group})
+
+    return recoded_df
+
+
+def age_to_numeric(df):
+    ages_df = df.copy()
+
+    ages = {
+        '[0-10)': 5,
+        '[10-20)': 15,
+        '[20-30)': 25,
+        '[30-40)': 35,
+        '[40-50)': 45,
+        '[50-60)': 55,
+        '[60-70)': 65,
+        '[70-80)': 75,
+        '[80-90)': 85,
+        '[90-100)': 95,
+    }
+
+    ages_df['age'] = ages_df['age'].replace(ages)
+
+    return ages_df
 
 
 def downsample_data(df, feature, minority_class, majority_class):
@@ -127,8 +228,7 @@ if __name__ == '__main__':
 
     # remove imbalanced features from categorical vars
     CATEGORICAL_FEATURES = [var for var in categorical_features_all
-                            if var not in imbalanced_features
-                            or var in KEEP_FEATURES]
+                            if var not in imbalanced_features]
 
     # keep only relevant columns, reorder also
     removed_df = downsampled_df[OUTPUT_FEATURES + CONTINOUS_FEATURES + CATEGORICAL_FEATURES]
