@@ -39,20 +39,20 @@ class DiabetesDataset(Dataset):
             raise ValueError('Must specify output feature(s) in list.')
 
         if self.continuous_features:
-            self.cont_X = df[self.continuous_features].astype(np.float32).values
+            self.x_cont = df[self.continuous_features].astype(np.float32).values
         else:
-            self.cont_X = np.zeros((self.n, 1))
+            self.x_cont = np.zeros((self.n, 1))
 
         if self.categorical_features:
-            self.cat_X = df[categorical_features].astype(np.int64).values
+            self.x_cat = df[categorical_features].astype(np.int64).values
         else:
-            self.cat_X = np.zeros((self.n, 1))
+            self.x_cat = np.zeros((self.n, 1))
 
     def __len__(self):
         return self.n
 
     def __getitem__(self, idx):
-        return [self.y[idx], self.cont_X[idx], self.cat_X[idx]]
+        return [self.y[idx], self.x_cont[idx], self.x_cat[idx]]
 
 
 def fetch_dataloaders(data_dir, features, params):
