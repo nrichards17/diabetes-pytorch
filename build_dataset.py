@@ -1,5 +1,6 @@
 import argparse
 import os
+import numpy as np
 
 import utils
 from sklearn.preprocessing import LabelEncoder
@@ -46,7 +47,7 @@ CONTINOUS_FEATURES = [
 OUTPUT_FEATURES = ['readmitted']
 
 
-def drop_rows(df):
+def drop_missing_and_expired_rows(df):
     dropped_df = df.copy()
 
     # drop multiple encounters
@@ -181,7 +182,6 @@ def upsample_data(df, feature, minority_class, majority_class):
     return upsampled_df
 
 
-
 def identify_imbalanced_categories(df, categorical_features, pct_threshold):
     imbalanced = []
     for var in categorical_features:
@@ -190,6 +190,31 @@ def identify_imbalanced_categories(df, categorical_features, pct_threshold):
             imbalanced.append(var)
 
     return imbalanced
+
+
+def log_transform(df, features):
+    log_df = df.copy()
+    for var in features:
+        # log + 1 otherwise log(0.0) instability
+        log_df[var] = np.log1p(log_df[var])
+
+    return log_df
+
+
+def remove_outliers(df, continuous_features):
+    """
+    Remove outliers based on 3 stds away from mean
+
+    Tried robust scaling (using 25, 75 quantile, iqr) - unstable
+    """
+
+    mean = df[continuous_features].mean()
+    std = df[continuous_features].std()
+
+    not_outliers = (df[continuous_features] > mean - 3.0 * std).all(axis=1) & (df[continuous_features] < mean + 3.0 * std).all(axis=1)
+    drop_outliers_df = df[not_outliers]
+
+    return drop_outliers_df
 
 
 def encode_data(df, categorical_features):
@@ -232,9 +257,23 @@ if __name__ == '__main__':
     df = raw_df.copy()
     df['readmitted'] = df['readmitted'].replace({'NO': '>30'})
 
+    print(' - Casting age as numeric')
+    df = age_to_numeric(df)
+
     print(' - Dropping multiple encounters, missing gender & diag_1, expired')
     before = df.shape
-    df = drop_rows(df)
+    df = drop_missing_and_expired_rows(df)
+    after = df.shape
+    print(f'\t{before} -> {after}')
+
+    print(' - Log transforming features')
+    log_features = ['number_emergency', 'number_inpatient', 'number_outpatient']
+    print(f'\t{log_features}')
+    df = log_transform(df, features=log_features)
+
+    print(' - Removing outliers in continuous features')
+    before = df.shape
+    df = remove_outliers(df, CONTINOUS_FEATURES)
     after = df.shape
     print(f'\t{before} -> {after}')
 
@@ -243,9 +282,6 @@ if __name__ == '__main__':
 
     print(' - Recoding admission and discharge ids')
     df = recode_admission_discharge(df)
-
-    print(' - Casting age as numeric')
-    df = age_to_numeric(df)
 
     # # downsample majority class in Readmitted output feature
     # print(' - Downsampling data')
