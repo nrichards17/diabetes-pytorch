@@ -2,7 +2,7 @@ import logging
 
 import numpy as np
 import torch
-from sklearn.metrics import accuracy_score, roc_auc_score, confusion_matrix
+from sklearn.metrics import accuracy_score, roc_auc_score, confusion_matrix, roc_curve
 
 
 def threshold_output(output, threshold=0.5):
@@ -27,6 +27,10 @@ def confusion(output, target):
     t_output = threshold_output(output)
 
     return confusion_matrix(target, t_output)
+
+# def fpr(output, target):
+#     fpr, tpr, _ = roc_curve(target, output)
+#     return fpr
 
 
 def evaluate(model, loss_fn, dataloader, metrics, params):
@@ -59,6 +63,27 @@ def evaluate(model, loss_fn, dataloader, metrics, params):
     metrics_mean = {metric: np.mean([x[metric] for x in summaries]) for metric in summaries[0]}
 
     return metrics_mean, matrix
+
+def evaluate_roc(model, dataloader, params):
+    device = params['device']
+
+    fpr, tpr = [], []
+
+    model.eval()
+    with torch.no_grad():
+        for i, (target, x_cont, x_cat) in enumerate(dataloader):
+            target, x_cont, x_cat = target.to(device), x_cont.to(device), x_cat.to(device)
+
+            output = model(x_cont, x_cat)
+
+            output_batch = output.data.cpu().numpy()
+            labels_batch = target.data.cpu().numpy()
+
+            fpr_batch, tpr_batch, _ = roc_curve(labels_batch, output_batch)
+            fpr.append(fpr_batch)
+            tpr.append(tpr_batch)
+
+    return fpr, tpr
 
 
 metrics = {
