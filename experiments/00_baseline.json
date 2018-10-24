@@ -3,26 +3,15 @@
 
   "dataset": "baseline",
 
-  "batch_size": 256,
+  "batch_size": 1024,
 
   "model": {
-    "dropout_emb": 0.2,
-    "dropout_fc": 0.6,
-    "size_fc": [1024],
-    "size_final": 16
+    "dropout_emb": 0.5,
+    "dropout_fc": 0.5,
+    "size_fc": [512, 256, 64, 64, 64],
+    "size_final": 64
   },
 
-  "optimizer": {
-    "type": "Adam",
-    "weight_decay": 1.0e-6
-  },
-
-  "scheduler": {
-    "type": "OneCycle",
-    "max_epochs": 50,
-    "eta_min": 1.0e-5,
-    "eta_max": 1.0e-2,
-    "epsilon": 0.0,
-    "end_fraction": 0.1
-  }
+  "learning_rate": 1e-3,
+  "max_epochs": 50
 }
