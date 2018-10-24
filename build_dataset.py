@@ -283,16 +283,6 @@ if __name__ == '__main__':
     print(' - Recoding admission and discharge ids')
     df = recode_admission_discharge(df)
 
-    # # downsample majority class in Readmitted output feature
-    # print(' - Downsampling data')
-    # before = df.shape
-    # df = downsample_data(df,
-    #                      feature='readmitted',
-    #                      minority_class='<30',
-    #                      majority_class='>30')
-    # after = df.shape
-    # print(f'\t{before} -> {after}')
-
     categorical_features_all = [var for var in raw_df.columns
                                 if var not in IGNORE_FEATURES
                                 and var not in CONTINOUS_FEATURES
@@ -338,10 +328,28 @@ if __name__ == '__main__':
                              minority_class=1,  # <30 days
                              majority_class=0)  # >30 days
 
+    # OR
+
+    # # downsample train set
+    # print(' - Downsampling train set')
+    # train_df = downsample_data(train_df,
+    #                            feature='readmitted',
+    #                            minority_class=1,  # <30 days
+    #                            majority_class=0)  # >30 days
+
+    val_df = downsample_data(val_df,
+                             feature='readmitted',
+                             minority_class=1,  # <30 days
+                             majority_class=0)  # >30 days
+
+    test_df = downsample_data(test_df,
+                             feature='readmitted',
+                             minority_class=1,  # <30 days
+                             majority_class=0)  # >30 days
+
     print('\tTrain: {}'.format(train_df.shape))
     print('\tVal: {}'.format(val_df.shape))
     print('\tTest: {}'.format(test_df.shape))
-
 
     if not os.path.exists(OUTPUT_DATA_DIR):
         print('Creating: output dir {}'.format(OUTPUT_DATA_DIR))
