@@ -9,8 +9,6 @@ import numpy as np
 import torch
 from torch.optim import Adam
 
-from richml.scheduler import OneCycleLR
-
 import utils
 import model.data_loader as data_loader
 import model.net as net
@@ -25,86 +23,81 @@ parser.add_argument('--path_to_data', default='data/processed', help='Path to pr
 SEED = 42
 
 
-def create_opt_from_params(model, params):
-    optim_params = params['optimizer']
-    sched_params = params['scheduler']
+def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_fn,
+                       metrics, params, results_path):
 
-    if optim_params['type'] == 'Adam':
-        optimizer = Adam(model.parameters(), weight_decay=optim_params['weight_decay'])
-    else:
-        raise NotImplementedError('Optimizer {} not implemented'.format(optim_params['type']))
+    num_epochs = params['max_epochs']
 
-    if sched_params['type'] == 'OneCycle':
-        scheduler = OneCycleLR(
-            optimizer,
-            max_epochs=sched_params['max_epochs'],
-            eta_min=sched_params['eta_min'],
-            eta_max=sched_params['eta_max'],
-            epsilon=sched_params['epsilon'],
-            end_fraction=sched_params['end_fraction']
-        )
-    else:
-        raise NotImplementedError('Scheduler {} not implemented'.format(sched_params['type']))
+    for epoch in range(num_epochs):
 
-    return optimizer, scheduler
+        logging.info('Epoch {}/{} | LR: {}'.format(epoch + 1, num_epochs, optimizer.param_groups[0]['lr']))
 
+        model.train()
+        device = params['device']
 
-def train(model, optimizer, loss_fn, dataloader, metrics, params):
-    """
-    todo
-    """
+        train_summ = []
+        train_confusion = np.zeros([2, 2])
 
-    # set model to training mode
-    model.train()
+        with tqdm(total=len(train_dataloader)) as bar:
+            for i, (target, x_cont, x_cat) in enumerate(train_dataloader):
+                target, x_cont, x_cat = target.to(device), x_cont.to(device), x_cat.to(device)
 
-    # device: gpu or cpu
-    device = params['device']
+                output = model(x_cont, x_cat)
+                loss = loss_fn(output, target)
 
-    summ = []
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
-    for i, (target, X_cont, X_cat) in enumerate(dataloader):
-        optimizer.zero_grad()
+                # Evaluate once in a while
+                if i % int(1 / 0.2) == 0:
+                    with torch.no_grad():
+                        output_batch = output.data.cpu().numpy()
+                        labels_batch = target.data.cpu().numpy()
 
-        target, X_cont, X_cat = target.to(device), X_cont.to(device), X_cat.to(device)
+                        summary_batch = {metric: metrics[metric](output_batch, labels_batch)
+                                         for metric in metrics}
+                        summary_batch['loss'] = loss.item()
+                        train_summ.append(summary_batch)
 
-        output = model(X_cont, X_cat)
-        loss = loss_fn(output, target)
-        loss.backward()
+                        train_confusion += evaluate.confusion(output_batch, labels_batch)
 
-        # scheduler.step()
-        optimizer.step()
+                bar.update()
 
-        # Evaluate once in a while
-        if i % int(1 / 0.2) == 0:
-            with torch.no_grad():
+        metrics_mean = {metric: np.mean([x[metric] for x in train_summ]) for metric in train_summ[0]}
+        metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_mean.items())
+        logging.info("- Train metrics: " + metrics_string)
+
+        logging.info("- Train confusion matrix:")
+        logging.info(train_confusion)
+
+        valid_summ = []
+        valid_confusion = np.zeros([2, 2])
+
+        model.eval()
+        with torch.no_grad():
+            for i, (target, x_cont, x_cat) in enumerate(val_dataloader):
+                target, x_cont, x_cat = target.to(device), x_cont.to(device), x_cat.to(device)
+
+                output = model(x_cont, x_cat)
+                loss = loss_fn(output, target)
+
                 output_batch = output.data.cpu().numpy()
                 labels_batch = target.data.cpu().numpy()
 
                 summary_batch = {metric: metrics[metric](output_batch, labels_batch)
                                  for metric in metrics}
                 summary_batch['loss'] = loss.item()
-                summ.append(summary_batch)
+                valid_summ.append(summary_batch)
 
-    metrics_mean = {metric: np.mean([x[metric] for x in summ]) for metric in summ[0]}
-    metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_mean.items())
-    logging.info("- Train metrics: " + metrics_string)
+                valid_confusion += evaluate.confusion(output_batch, labels_batch)
 
-def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, scheduler, loss_fn,
-                       metrics, params, results_path):
+        metrics_mean = {metric: np.mean([x[metric] for x in valid_summ]) for metric in valid_summ[0]}
+        metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_mean.items())
+        logging.info("- Eval metrics : " + metrics_string)
 
-    num_epochs = params['scheduler']['max_epochs']
-
-    for epoch in range(num_epochs):
-        # step scheduler
-        if scheduler:
-            scheduler.step(epoch)
-
-        logging.info('Epoch {}/{} | LR: {}'.format(epoch + 1, num_epochs, optimizer.param_groups[0]['lr']))
-
-        train(model, optimizer, loss_fn, train_dataloader, metrics, params)
-
-        # evaluate on val
-        val_metrics = evaluate.evaluate(model, loss_fn, val_dataloader, metrics, params)
+        logging.info("- Eval confusion matrix:")
+        logging.info(valid_confusion)
 
 
 if __name__ == '__main__':
@@ -159,29 +152,21 @@ if __name__ == '__main__':
     # create model and optimizer
     model = net.Network(params)
     model.to(params['device'])
+    logging.info(model)
 
     # optimizer, scheduler = create_opt_from_params(model, params)
-    optimizer = Adam(model.parameters(), lr=1.0e-3, weight_decay=1.0e-4)
+    optimizer = Adam(model.parameters(), lr=params['learning_rate'])
     scheduler = None
 
     # set loss fn and metrics
     loss_fn = torch.nn.BCELoss()
-    # loss_fn = torch.nn.BCEWithLogitsLoss()
-
-    # metrics
     metrics = evaluate.metrics
-
-    logging.info(model)
-
-    # for var, params in zip(params['categorical'], model.embeddings.parameters()):
-    #     print(var)
-    #     print(params)
 
     if click.confirm('Continue with training?', default=False):
         # train model
-        logging.info('Starting training for {} epoch(s)'.format(params['scheduler']['max_epochs']))
+        logging.info('Starting training for {} epoch(s)'.format(params['max_epochs']))
         try:
-            train_and_evaluate(model, train_dl, val_dl, optimizer, scheduler, loss_fn, metrics, params, results_path)
+            new_model = train_and_evaluate(model, train_dl, val_dl, optimizer, scheduler, loss_fn, metrics, params, results_path)
         except KeyboardInterrupt:
             logging.warning('Training interrupted by user.')
             sys.exit(0)
