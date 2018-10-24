@@ -1,6 +1,7 @@
 import json
+import os
 import logging
-
+import pandas as pd
 
 class Params(dict):
     def save(self, json_path):
@@ -48,3 +49,17 @@ def set_logger(log_path):
         stream_handler = logging.StreamHandler()
         stream_handler.setFormatter(logging.Formatter('%(message)s'))
         logger.addHandler(stream_handler)
+
+
+def save_metric_histories(train_hist, valid_hist, results_path):
+    """
+    both lists of dicts, keys are metric names
+    """
+    train_hist_df = pd.DataFrame(train_hist)
+    valid_hist_df = pd.DataFrame(valid_hist)
+
+    TRAIN_HIST_FILE = os.path.join(results_path, 'train_hist.csv')
+    VALID_HIST_FILE = os.path.join(results_path, 'valid_hist.csv')
+
+    train_hist_df.to_csv(TRAIN_HIST_FILE, index=False)
+    valid_hist_df.to_csv(VALID_HIST_FILE, index=False)
