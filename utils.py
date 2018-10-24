@@ -1,7 +1,9 @@
 import json
 import os
 import logging
+
 import pandas as pd
+import torch
 
 class Params(dict):
     def save(self, json_path):
@@ -47,7 +49,7 @@ def set_logger(log_path):
 
         # Logging to console
         stream_handler = logging.StreamHandler()
-        stream_handler.setFormatter(logging.Formatter('%(message)s'))
+        stream_handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s: %(message)s'))
         logger.addHandler(stream_handler)
 
 
@@ -63,3 +65,13 @@ def save_metric_histories(train_hist, valid_hist, results_path):
 
     train_hist_df.to_csv(TRAIN_HIST_FILE, index=False)
     valid_hist_df.to_csv(VALID_HIST_FILE, index=False)
+
+
+def save_model(model, results_path):
+    MODEL_FILE = os.path.join(results_path, 'model.pt')
+    torch.save(model, MODEL_FILE)
+
+
+def load_model(path):
+    assert os.path.exists(path), f'File {path} does not exist.'
+    return torch.load(path)

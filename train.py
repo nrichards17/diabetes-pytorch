@@ -14,8 +14,6 @@ import model.data_loader as data_loader
 import model.net as net
 import evaluate
 
-import pandas as pd
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--experiment', help='Path to experiment json file.')
@@ -30,16 +28,14 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
 
     num_epochs = params['max_epochs']
     train_histories, valid_histories = [], []
+    best_valid_auroc = 0.0
 
     for epoch in range(num_epochs):
 
-        logging.info('Epoch {}/{} | LR: {}'.format(epoch + 1, num_epochs, optimizer.param_groups[0]['lr']))
+        logging.info(' - Epoch {}/{} | LR: {}'.format(epoch + 1, num_epochs, optimizer.param_groups[0]['lr']))
 
         model.train()
         device = params['device']
-
-        # train_summ = []
-        # train_confusion = np.zeros([2, 2])
 
         with tqdm(total=len(train_dataloader)) as bar:
             for i, (target, x_cont, x_cat) in enumerate(train_dataloader):
@@ -52,42 +48,30 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
                 loss.backward()
                 optimizer.step()
 
-        #         # Evaluate once in a while
-        #         if i % int(1 / 0.2) == 0:
-        #             with torch.no_grad():
-        #                 output_batch = output.data.cpu().numpy()
-        #                 labels_batch = target.data.cpu().numpy()
-        #
-        #                 summary_batch = {metric: metrics[metric](output_batch, labels_batch)
-        #                                  for metric in metrics}
-        #                 summary_batch['loss'] = loss.item()
-        #                 train_summ.append(summary_batch)
-        #
-        #                 train_confusion += evaluate.confusion(output_batch, labels_batch)
                 bar.update()
-        #
-        # metrics_mean = {metric: np.mean([x[metric] for x in train_summ]) for metric in train_summ[0]}
 
-        train_metrics_mean, train_confusion = evaluate.evaluate(model, loss_fn, train_dataloader, metrics, params)
-        train_histories.append(train_metrics_mean)
+        train_metrics, train_confusion = evaluate.evaluate(model, loss_fn, train_dataloader, metrics, params)
+        train_histories.append(train_metrics)
 
-        train_metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in train_metrics_mean.items())
-        logging.info("- Train metrics: " + train_metrics_string)
-
-        logging.info("- Train confusion matrix:")
-        logging.info(train_confusion)
-
+        train_metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in train_metrics.items())
+        logging.info(" - Train metrics: " + train_metrics_string)
+        logging.info(" - Train confusion matrix: \n{}".format(train_confusion))
 
         # evaluate on validation set
-        valid_metrics_mean, valid_confusion = evaluate.evaluate(model, loss_fn, val_dataloader, metrics, params)
-        valid_histories.append(valid_metrics_mean)
+        valid_metrics, valid_confusion = evaluate.evaluate(model, loss_fn, val_dataloader, metrics, params)
+        valid_histories.append(valid_metrics)
 
-        valid_metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in valid_metrics_mean.items())
-        logging.info("- Val metrics : " + valid_metrics_string)
+        valid_metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in valid_metrics.items())
+        logging.info(" - Val metrics : " + valid_metrics_string)
+        logging.info(" - Valid confusion matrix: \n{}".format(valid_confusion))
 
-        logging.info("- Valid confusion matrix:")
-        logging.info(valid_confusion)
+        curr_valid_auroc = valid_metrics['auroc']
+        if curr_valid_auroc >= best_valid_auroc:
+            logging.info(" - New best validation AUROC - saving model.")
+            best_valid_auroc = curr_valid_auroc
+            utils.save_model(model, results_path)
 
+        # save histories to csv
         utils.save_metric_histories(train_histories, valid_histories, results_path)
 
 
