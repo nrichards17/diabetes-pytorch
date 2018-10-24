@@ -14,6 +14,8 @@ import model.data_loader as data_loader
 import model.net as net
 import evaluate
 
+import pandas as pd
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--experiment', help='Path to experiment json file.')
@@ -27,6 +29,7 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
                        metrics, params, results_path):
 
     num_epochs = params['max_epochs']
+    train_histories, valid_histories = [], []
 
     for epoch in range(num_epochs):
 
@@ -35,8 +38,8 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
         model.train()
         device = params['device']
 
-        train_summ = []
-        train_confusion = np.zeros([2, 2])
+        # train_summ = []
+        # train_confusion = np.zeros([2, 2])
 
         with tqdm(total=len(train_dataloader)) as bar:
             for i, (target, x_cont, x_cat) in enumerate(train_dataloader):
@@ -49,55 +52,43 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
                 loss.backward()
                 optimizer.step()
 
-                # Evaluate once in a while
-                if i % int(1 / 0.2) == 0:
-                    with torch.no_grad():
-                        output_batch = output.data.cpu().numpy()
-                        labels_batch = target.data.cpu().numpy()
-
-                        summary_batch = {metric: metrics[metric](output_batch, labels_batch)
-                                         for metric in metrics}
-                        summary_batch['loss'] = loss.item()
-                        train_summ.append(summary_batch)
-
-                        train_confusion += evaluate.confusion(output_batch, labels_batch)
-
+        #         # Evaluate once in a while
+        #         if i % int(1 / 0.2) == 0:
+        #             with torch.no_grad():
+        #                 output_batch = output.data.cpu().numpy()
+        #                 labels_batch = target.data.cpu().numpy()
+        #
+        #                 summary_batch = {metric: metrics[metric](output_batch, labels_batch)
+        #                                  for metric in metrics}
+        #                 summary_batch['loss'] = loss.item()
+        #                 train_summ.append(summary_batch)
+        #
+        #                 train_confusion += evaluate.confusion(output_batch, labels_batch)
                 bar.update()
+        #
+        # metrics_mean = {metric: np.mean([x[metric] for x in train_summ]) for metric in train_summ[0]}
 
-        metrics_mean = {metric: np.mean([x[metric] for x in train_summ]) for metric in train_summ[0]}
-        metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_mean.items())
-        logging.info("- Train metrics: " + metrics_string)
+        train_metrics_mean, train_confusion = evaluate.evaluate(model, loss_fn, train_dataloader, metrics, params)
+        train_histories.append(train_metrics_mean)
+
+        train_metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in train_metrics_mean.items())
+        logging.info("- Train metrics: " + train_metrics_string)
 
         logging.info("- Train confusion matrix:")
         logging.info(train_confusion)
 
-        valid_summ = []
-        valid_confusion = np.zeros([2, 2])
 
-        model.eval()
-        with torch.no_grad():
-            for i, (target, x_cont, x_cat) in enumerate(val_dataloader):
-                target, x_cont, x_cat = target.to(device), x_cont.to(device), x_cat.to(device)
+        # evaluate on validation set
+        valid_metrics_mean, valid_confusion = evaluate.evaluate(model, loss_fn, val_dataloader, metrics, params)
+        valid_histories.append(valid_metrics_mean)
 
-                output = model(x_cont, x_cat)
-                loss = loss_fn(output, target)
+        valid_metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in valid_metrics_mean.items())
+        logging.info("- Val metrics : " + valid_metrics_string)
 
-                output_batch = output.data.cpu().numpy()
-                labels_batch = target.data.cpu().numpy()
-
-                summary_batch = {metric: metrics[metric](output_batch, labels_batch)
-                                 for metric in metrics}
-                summary_batch['loss'] = loss.item()
-                valid_summ.append(summary_batch)
-
-                valid_confusion += evaluate.confusion(output_batch, labels_batch)
-
-        metrics_mean = {metric: np.mean([x[metric] for x in valid_summ]) for metric in valid_summ[0]}
-        metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_mean.items())
-        logging.info("- Eval metrics : " + metrics_string)
-
-        logging.info("- Eval confusion matrix:")
+        logging.info("- Valid confusion matrix:")
         logging.info(valid_confusion)
+
+        utils.save_metric_histories(train_histories, valid_histories, results_path)
 
 
 if __name__ == '__main__':
@@ -156,7 +147,6 @@ if __name__ == '__main__':
 
     # optimizer, scheduler = create_opt_from_params(model, params)
     optimizer = Adam(model.parameters(), lr=params['learning_rate'])
-    scheduler = None
 
     # set loss fn and metrics
     loss_fn = torch.nn.BCELoss()
@@ -166,7 +156,7 @@ if __name__ == '__main__':
         # train model
         logging.info('Starting training for {} epoch(s)'.format(params['max_epochs']))
         try:
-            new_model = train_and_evaluate(model, train_dl, val_dl, optimizer, scheduler, loss_fn, metrics, params, results_path)
+            new_model = train_and_evaluate(model, train_dl, val_dl, optimizer, loss_fn, metrics, params, results_path)
         except KeyboardInterrupt:
             logging.warning('Training interrupted by user.')
             sys.exit(0)
