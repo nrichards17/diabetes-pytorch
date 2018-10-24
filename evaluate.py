@@ -2,17 +2,31 @@ import logging
 
 import numpy as np
 import torch
-from sklearn.metrics import accuracy_score, roc_auc_score
+from sklearn.metrics import accuracy_score, roc_auc_score, confusion_matrix
+
+
+def threshold_output(output, threshold=0.5):
+    t_output = np.zeros_like(output)
+    t_output[output >= threshold] = 1.0
+    t_output[output < threshold] = 0.0
+
+    return t_output
 
 
 def accuracy(output, target, threshold=0.5):
-    output[output >= threshold] = 1
-    output[output < threshold] = 0
-    return accuracy_score(target, output)
+    t_output = threshold_output(output, threshold=threshold)
+
+    return accuracy_score(target, t_output)
 
 
 def auroc(output, target):
     return roc_auc_score(target, output)
+
+
+def confusion(output, target):
+    t_output = threshold_output(output)
+
+    return confusion_matrix(target, t_output)
 
 
 def evaluate(model, loss_fn, dataloader, metrics, params):
@@ -26,6 +40,8 @@ def evaluate(model, loss_fn, dataloader, metrics, params):
     device = params['device']
 
     summ = []
+
+    confusion = np.zeros([2,2])
 
     with torch.no_grad():
         for i, (target, X_cont, X_cat) in enumerate(dataloader):
@@ -46,9 +62,15 @@ def evaluate(model, loss_fn, dataloader, metrics, params):
             summary_batch['loss'] = loss.item()
             summ.append(summary_batch)
 
+            confusion += confusion(output_batch, labels_batch)
+
     metrics_mean = {metric: np.mean([x[metric] for x in summ]) for metric in summ[0]}
     metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_mean.items())
     logging.info("- Eval metrics : " + metrics_string)
+
+    logging.info("- Confusion matrix:")
+    logging.info(confusion)
+
     return metrics_mean
 
 
