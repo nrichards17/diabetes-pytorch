@@ -3,15 +3,15 @@
 
   "dataset": "baseline",
 
-  "batch_size": 1024,
+  "batch_size": 256,
 
   "model": {
     "dropout_emb": 0.5,
-    "dropout_fc": 0.5,
-    "size_fc": [512, 256, 64, 64, 64],
-    "size_final": 64
+    "dropout_fc": 0.65,
+    "size_fc": [512, 256, 64, 64, 64, 64, 64, 64],
+    "size_final": 32
   },
 
-  "learning_rate": 1e-3,
-  "max_epochs": 50
+  "learning_rate": 5e-3,
+  "max_epochs": 20
 }

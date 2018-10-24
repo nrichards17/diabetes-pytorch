@@ -76,9 +76,9 @@ def fetch_dataloaders(data_dir, features, params):
                                   output_features=features['output'])
 
         if split == 'train':
-            loader = DataLoader(dataset, batch_size=params['batch_size'], shuffle=True)
+            loader = DataLoader(dataset, batch_size=params['batch_size'], drop_last=True, shuffle=True)
         else:
-            loader = DataLoader(dataset, batch_size=params['batch_size'], shuffle=False)
+            loader = DataLoader(dataset, batch_size=params['batch_size'], drop_last=True, shuffle=False)
 
         dataloaders[split] = loader
 
