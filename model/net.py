@@ -58,13 +58,14 @@ class Network(nn.Module):
         )
 
         self.output_linear = nn.Linear(size_final, 1)
+        self.sigmoid = nn.Sigmoid()
 
-    def forward(self, cont_data, cat_data):
+    def forward(self, x_cont, x_cat):
         # apply batchnorm to continuous input
-        x_cont = self.bn_continuous(cont_data)
+        x_cont = self.bn_continuous(x_cont)
 
         # apply embeddings to each categorical variable, store in list
-        x_cat = [embedding(cat_data[:, i]) for i, embedding in enumerate(self.embeddings)]
+        x_cat = [embedding(x_cat[:, i]) for i, embedding in enumerate(self.embeddings)]
         # concatenate embeddings across categorical variables
         x_cat = torch.cat(x_cat, 1)
         # apply dropout for embeddings
@@ -79,6 +80,6 @@ class Network(nn.Module):
         # apply output linear layer
         x = self.output_linear(x)
         # apply sigmoid to output, squash (0,1)
-        x = torch.sigmoid(x)
+        x = self.sigmoid(x)
 
         return x
